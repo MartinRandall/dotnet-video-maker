@@ -157,7 +157,10 @@ public class VideoMaker
         var fadeOffset = _imageDuration - _fadeDuration;
         var filterComplex = BuildTwoImageFilterComplex(fadeOffset);
 
-        var arguments = $"-loop 1 -t {_imageDuration} -i \"{img1}\" -loop 1 -t {_imageDuration} -i \"{img2}\" -filter_complex \"{filterComplex}\" -map [out] -c:v libx264 -crf 23 -r {Fps} -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -y \"{_outputFile.FullName}\"";
+        // For crossfade to work properly, we need to extend input duration for overlap
+        var inputDuration = _imageDuration + _fadeDuration;
+        
+        var arguments = $"-loop 1 -t {inputDuration} -i \"{img1}\" -loop 1 -t {inputDuration} -i \"{img2}\" -filter_complex \"{filterComplex}\" -map [out] -c:v libx264 -crf 23 -r {Fps} -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -y \"{_outputFile.FullName}\"";
 
         await RunFFmpegAsync(arguments);
         Console.WriteLine($"Video created successfully: {_outputFile.FullName}");
@@ -168,9 +171,12 @@ public class VideoMaker
         // For multi-image crossfade, we need to extend the duration of each input
         // to allow proper overlap for the xfade transitions
         var inputArgs = new List<string>();
+        
+        // For multi-image crossfade, we need to extend the duration of each input
+        // to allow proper overlap for the xfade transitions
         var inputDuration = _imageDuration + _fadeDuration;
         
-        // Add all image inputs with extended duration
+        // Add all image inputs with calculated duration
         for (int i = 0; i < imageFiles.Length; i++)
         {
             inputArgs.Add($"-loop 1 -t {inputDuration} -i \"{imageFiles[i]}\"");
@@ -250,7 +256,7 @@ public class VideoMaker
         var kenBurns = GetKenBurnsParameters(imageIndex);
         
         // Create zoompan filter for Ken Burns effect
-        // Using a simplified approach with zoompan filter
+        // Use exact frame count to prevent timing issues
         var durationFrames = _imageDuration * Fps;
         
         // Format zoom values to avoid locale issues
@@ -264,7 +270,7 @@ public class VideoMaker
         return $"zoompan=z='{startZoom}+({endZoom}-{startZoom})*on/{durationFrames}':" +
                $"x='iw/2-(iw/zoom/2)+({endX}-{startX})*on/{durationFrames}*iw':" +
                $"y='ih/2-(ih/zoom/2)+({endY}-{startY})*on/{durationFrames}*ih':" +
-               $"d={durationFrames}:s={OutputWidth}x{OutputHeight}:fps={Fps}";
+               $"d=1";
     }
     
     private KenBurnsParameters GetKenBurnsParameters(int imageIndex)
