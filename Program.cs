@@ -12,6 +12,7 @@ class Program
         var outputFile = "./output.mp4";
         var imageDuration = 5;
         var fadeDuration = 1.0;
+        var enableKenBurns = true;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -33,6 +34,9 @@ class Program
                 case "--fade":
                     fadeDuration = double.Parse(args[++i]);
                     break;
+                case "--no-ken-burns":
+                    enableKenBurns = false;
+                    break;
                 case "-h":
                 case "--help":
                     Console.WriteLine("Video Maker - Convert JPEG images to MP4 video with crossfade transitions");
@@ -42,6 +46,7 @@ class Program
                     Console.WriteLine("  -o, --output <file>   Output video file (default: ./output.mp4)");
                     Console.WriteLine("  -d, --duration <sec>  Duration to show each image in seconds (default: 5)");
                     Console.WriteLine("  -f, --fade <sec>      Fade transition duration in seconds (default: 1.0)");
+                    Console.WriteLine("  --no-ken-burns        Disable Ken Burns effect (enabled by default)");
                     Console.WriteLine("  -h, --help            Show this help message");
                     return 0;
             }
@@ -49,7 +54,7 @@ class Program
 
         try
         {
-            var videoMaker = new VideoMaker(new DirectoryInfo(inputDir), new FileInfo(outputFile), imageDuration, fadeDuration);
+            var videoMaker = new VideoMaker(new DirectoryInfo(inputDir), new FileInfo(outputFile), imageDuration, fadeDuration, enableKenBurns);
             await videoMaker.CreateVideoAsync();
             return 0;
         }
@@ -67,16 +72,18 @@ public class VideoMaker
     private readonly FileInfo _outputFile;
     private readonly int _imageDuration;
     private readonly double _fadeDuration;
+    private readonly bool _enableKenBurns;
     private const int OutputWidth = 1920;
     private const int OutputHeight = 1080;
     private const int Fps = 25;
 
-    public VideoMaker(DirectoryInfo inputDir, FileInfo outputFile, int imageDuration, double fadeDuration)
+    public VideoMaker(DirectoryInfo inputDir, FileInfo outputFile, int imageDuration, double fadeDuration, bool enableKenBurns = true)
     {
         _inputDir = inputDir;
         _outputFile = outputFile;
         _imageDuration = imageDuration;
         _fadeDuration = fadeDuration;
+        _enableKenBurns = enableKenBurns;
     }
 
     public async Task CreateVideoAsync()
@@ -179,25 +186,20 @@ public class VideoMaker
 
     private string BuildTwoImageFilterComplex(double fadeOffset)
     {
-        return $"[0:v]scale={OutputWidth}:{OutputHeight}:force_original_aspect_ratio=decrease," +
-               $"pad={OutputWidth}:{OutputHeight}:(ow-iw)/2:(oh-ih)/2:black," +
-               $"colorspace=bt709:iall=bt601-6-625:fast=1[v0];" +
-               $"[1:v]scale={OutputWidth}:{OutputHeight}:force_original_aspect_ratio=decrease," +
-               $"pad={OutputWidth}:{OutputHeight}:(ow-iw)/2:(oh-ih)/2:black," +
-               $"colorspace=bt709:iall=bt601-6-625:fast=1[v1];" +
-               $"[v0][v1]xfade=transition=fade:duration={_fadeDuration}:offset={fadeOffset}[out]";
+        var img1Filter = BuildImageFilter(0, 0);
+        var img2Filter = BuildImageFilter(1, 1);
+        
+        return $"{img1Filter};{img2Filter};[v0][v1]xfade=transition=fade:duration={_fadeDuration}:offset={fadeOffset}[out]";
     }
 
     private string BuildMultiImageFilterComplex(int imageCount)
     {
         var filters = new List<string>();
         
-        // Scale and pad all inputs
+        // Scale and pad all inputs with Ken Burns effect
         for (int i = 0; i < imageCount; i++)
         {
-            filters.Add($"[{i}:v]scale={OutputWidth}:{OutputHeight}:force_original_aspect_ratio=decrease," +
-                       $"pad={OutputWidth}:{OutputHeight}:(ow-iw)/2:(oh-ih)/2:black," +
-                       $"colorspace=bt709:iall=bt601-6-625:fast=1[v{i}]");
+            filters.Add(BuildImageFilter(i, i));
         }
         
         // Chain xfade filters
@@ -224,6 +226,83 @@ public class VideoMaker
         
         return string.Join(";", filters);
     }
+    
+    private string BuildImageFilter(int inputIndex, int imageIndex)
+    {
+        var baseFilter = $"[{inputIndex}:v]scale={OutputWidth}:{OutputHeight}:force_original_aspect_ratio=decrease," +
+                        $"pad={OutputWidth}:{OutputHeight}:(ow-iw)/2:(oh-ih)/2:black," +
+                        $"colorspace=bt709:iall=bt601-6-625:fast=1";
+        
+        if (_enableKenBurns)
+        {
+            var kenBurnsFilter = BuildKenBurnsFilter(imageIndex);
+            return $"{baseFilter},{kenBurnsFilter}[v{inputIndex}]";
+        }
+        else
+        {
+            return $"{baseFilter}[v{inputIndex}]";
+        }
+    }
+    
+    private string BuildKenBurnsFilter(int imageIndex)
+    {
+        // Generate Ken Burns parameters for this image
+        var kenBurns = GetKenBurnsParameters(imageIndex);
+        
+        // Create zoompan filter for Ken Burns effect
+        // Using a simplified approach with zoompan filter
+        var durationFrames = _imageDuration * Fps;
+        
+        // Format zoom values to avoid locale issues
+        var startZoom = kenBurns.StartZoom.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+        var endZoom = kenBurns.EndZoom.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+        var startX = kenBurns.StartX.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+        var endX = kenBurns.EndX.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+        var startY = kenBurns.StartY.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+        var endY = kenBurns.EndY.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+        
+        return $"zoompan=z='{startZoom}+({endZoom}-{startZoom})*on/{durationFrames}':" +
+               $"x='iw/2-(iw/zoom/2)+({endX}-{startX})*on/{durationFrames}*iw':" +
+               $"y='ih/2-(ih/zoom/2)+({endY}-{startY})*on/{durationFrames}*ih':" +
+               $"d={durationFrames}:s={OutputWidth}x{OutputHeight}:fps={Fps}";
+    }
+    
+    private KenBurnsParameters GetKenBurnsParameters(int imageIndex)
+    {
+        // Create different Ken Burns effects for variety
+        var random = new Random(imageIndex + 42); // Seed for consistency
+        
+        var effects = new[]
+        {
+            // Zoom in from left to right
+            new KenBurnsParameters(1.0, 1.2, 0.0, 0.1, 0.0, 0.0),
+            // Zoom in from right to left  
+            new KenBurnsParameters(1.0, 1.2, 0.1, 0.0, 0.0, 0.0),
+            // Zoom in from top to bottom
+            new KenBurnsParameters(1.0, 1.2, 0.0, 0.0, 0.0, 0.1),
+            // Zoom in from bottom to top
+            new KenBurnsParameters(1.0, 1.2, 0.0, 0.0, 0.1, 0.0),
+            // Zoom out from center
+            new KenBurnsParameters(1.2, 1.0, 0.0, 0.0, 0.0, 0.0),
+            // Diagonal zoom in (top-left to bottom-right)
+            new KenBurnsParameters(1.0, 1.15, 0.0, 0.05, 0.0, 0.05),
+            // Diagonal zoom in (top-right to bottom-left)
+            new KenBurnsParameters(1.0, 1.15, 0.05, 0.0, 0.0, 0.05),
+            // Subtle zoom with slight pan
+            new KenBurnsParameters(1.0, 1.1, 0.0, 0.02, 0.0, 0.02)
+        };
+        
+        return effects[imageIndex % effects.Length];
+    }
+    
+    private record KenBurnsParameters(
+        double StartZoom,
+        double EndZoom,
+        double StartX,
+        double EndX,
+        double StartY,
+        double EndY
+    );
 
     private async Task CreateSimpleVideoAsync(string[] imageFiles)
     {
@@ -249,7 +328,21 @@ public class VideoMaker
             
             await File.WriteAllLinesAsync(tempConcatFile, concatContent);
             
-            var arguments = $"-f concat -safe 0 -i \"{tempConcatFile}\" -vf scale={OutputWidth}:{OutputHeight}:force_original_aspect_ratio=decrease,pad={OutputWidth}:{OutputHeight}:(ow-iw)/2:(oh-ih)/2:black -c:v libx264 -crf 23 -r {Fps} -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -y \"{_outputFile.FullName}\"";
+            string videoFilter;
+            if (_enableKenBurns)
+            {
+                // For Ken Burns with concat, we need to apply the effect to each segment individually
+                // This is more complex, so we'll fall back to creating individual videos and concatenating
+                Console.WriteLine("Ken Burns effect with multiple images without crossfade is not yet implemented.");
+                Console.WriteLine("Using standard scaling instead.");
+                videoFilter = $"scale={OutputWidth}:{OutputHeight}:force_original_aspect_ratio=decrease,pad={OutputWidth}:{OutputHeight}:(ow-iw)/2:(oh-ih)/2:black";
+            }
+            else
+            {
+                videoFilter = $"scale={OutputWidth}:{OutputHeight}:force_original_aspect_ratio=decrease,pad={OutputWidth}:{OutputHeight}:(ow-iw)/2:(oh-ih)/2:black";
+            }
+            
+            var arguments = $"-f concat -safe 0 -i \"{tempConcatFile}\" -vf {videoFilter} -c:v libx264 -crf 23 -r {Fps} -pix_fmt yuv420p -colorspace bt709 -color_primaries bt709 -color_trc bt709 -y \"{_outputFile.FullName}\"";
 
             await RunFFmpegAsync(arguments);
             Console.WriteLine($"Video created successfully: {_outputFile.FullName}");

@@ -10,6 +10,7 @@ A powerful .NET console application that converts a series of JPEG images into a
 
 - **Image Duration**: Each image is displayed for 5 seconds by default (configurable)
 - **Crossfade Transitions**: 1-second crossfade between images by default (configurable)
+- **Ken Burns Effect**: Adds documentary-style zoom and pan motion to images (enabled by default)
 - **Output Resolution**: 1920x1080 pixels (Full HD)
 - **Aspect Ratio Preservation**: Images are scaled to fit with letterboxing if needed
 - **Multiple Images Support**: Can handle 2 or more images with smooth xfade transitions
@@ -52,6 +53,7 @@ dotnet run -- [options]
 - `-o, --output <file>` - Output video file (default: ./output.mp4)
 - `-d, --duration <sec>` - Duration to show each image in seconds (default: 5)
 - `-f, --fade <sec>` - Fade transition duration in seconds (default: 1.0)
+- `--no-ken-burns` - Disable Ken Burns effect (enabled by default)
 - `-h, --help` - Show help message
 
 ### Examples
@@ -66,6 +68,9 @@ dotnet run -- -d 3 -f 0.5
 # Create video with no crossfade (set fade to 0)
 dotnet run -- -f 0
 
+# Disable Ken Burns effect for static images
+dotnet run -- --no-ken-burns
+
 # Complete example with all options
 dotnet run -- -i ./vacation-photos -o ./vacation-video.mp4 -d 4 -f 1.5
 ```
@@ -73,10 +78,13 @@ dotnet run -- -i ./vacation-photos -o ./vacation-video.mp4 -d 4 -f 1.5
 ## How It Works
 
 1. **Image Processing**: The application scans the input directory for JPEG files (*.jpg, *.jpeg)
-2. **Crossfade Logic**: 
+2. **Ken Burns Effect**: Each image gets a subtle zoom and pan motion using FFmpeg's `zoompan` filter
+   - 8 different motion patterns cycle through images for variety
+   - Includes zoom in/out, left/right pans, and diagonal movements
+3. **Crossfade Logic**: 
    - For 2 images: Uses direct xfade filter
    - For 3+ images: Chains multiple xfade filters for seamless transitions
-3. **Video Generation**: Uses FFmpeg with the following settings:
+4. **Video Generation**: Uses FFmpeg with the following settings:
    - Codec: H.264 (libx264)
    - Quality: CRF 23 (good balance of quality and file size)
    - Frame Rate: 25 fps
@@ -86,6 +94,7 @@ dotnet run -- -i ./vacation-photos -o ./vacation-video.mp4 -d 4 -f 1.5
 
 - **Scaling**: Images are scaled to fit 1920x1080 while preserving aspect ratio
 - **Padding**: Black bars are added if needed to maintain the target resolution
+- **Ken Burns**: Uses FFmpeg's `zoompan` filter with linear interpolation for smooth motion
 - **Crossfade**: Uses FFmpeg's xfade filter with fade transition
 - **Timing**: Each crossfade starts before the current image ends for smooth transitions
 
@@ -115,3 +124,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Built with [.NET 9.0](https://dotnet.microsoft.com/)
 - Uses [FFmpeg](https://ffmpeg.org/) for video processing
 - Crossfade transitions powered by FFmpeg's `xfade` filter
+- Ken Burns effect implemented with FFmpeg's `zoompan` filter
