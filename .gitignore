@@ -320,9 +320,16 @@ MigrationBackup/
 images/*.jpg
 images/*.jpeg
 images/*.png
+images/*.heic
+images/*.HEIC
 !images/README.md
 
 # Temporary files
 *.tmp
 temp_*
 test_*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
