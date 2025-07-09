@@ -1,6 +1,10 @@
 # VideoMaker - .NET Console Application
 
-A .NET console application that converts a series of JPEG images into an MP4 video file with crossfade transitions.
+[![.NET](https://img.shields.io/badge/.NET-9.0-blue.svg)](https://dotnet.microsoft.com/download)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/platform-cross--platform-lightgrey.svg)](https://dotnet.microsoft.com/download)
+
+A powerful .NET console application that converts a series of JPEG images into an MP4 video file with smooth crossfade transitions using FFmpeg's `xfade` filter.
 
 ## Features
 
@@ -97,3 +101,17 @@ The application creates an MP4 video file with:
 - Resolution: 1920x1080 (Full HD)
 - Smooth crossfade transitions between images
 - Professional quality encoding suitable for sharing or presentation
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Built with [.NET 9.0](https://dotnet.microsoft.com/)
+- Uses [FFmpeg](https://ffmpeg.org/) for video processing
+- Crossfade transitions powered by FFmpeg's `xfade` filter
